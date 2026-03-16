@@ -99,9 +99,6 @@ fn recognize_audio(
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect();
 
-    eprintln!("[跟读助手] 收到音频: {} 采样点, 采样率 {}, 时长 {:.1}s",
-        samples.len(), sample_rate, samples.len() as f64 / sample_rate as f64);
-
     let lang = language_to_sense_voice(&language);
 
     recognizer_state.recognize(&samples, sample_rate, lang)
