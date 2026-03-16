@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createTask } from "../lib/api";
 import { LANGUAGE_OPTIONS, type Language } from "../lib/types";
+import { IconArrowLeft, IconLoader } from "../components/Icons";
 
 export default function CreateTask() {
   const [title, setTitle] = useState("");
@@ -34,32 +35,47 @@ export default function CreateTask() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="max-w-2xl mx-auto px-8 py-8">
+      {/* Back */}
       <button
         onClick={() => navigate("/")}
-        className="text-gray-500 hover:text-gray-700 mb-6 inline-flex items-center gap-1 text-sm"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors cursor-pointer mb-6"
       >
-        ← 返回列表
+        <IconArrowLeft className="w-4 h-4" />
+        返回列表
       </button>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">创建跟读任务</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <h1 className="text-2xl font-bold text-gray-900 tracking-tight mb-1">
+        创建跟读任务
+      </h1>
+      <p className="text-sm text-gray-500 mb-8">
+        输入要练习的文本，每行一句
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Title */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            标题（可选）
+          <label
+            htmlFor="title"
+            className="block text-sm font-medium text-gray-700 mb-1.5"
+          >
+            任务标题
+            <span className="text-gray-400 font-normal ml-1">（可选）</span>
           </label>
           <input
+            id="title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="为任务取个名字..."
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+            placeholder="例如：日语 N3 听力练习"
+            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-shadow"
           />
         </div>
 
+        {/* Language */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            语种
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            选择语种
           </label>
           <div className="flex gap-2 flex-wrap">
             {LANGUAGE_OPTIONS.map((opt) => (
@@ -67,10 +83,10 @@ export default function CreateTask() {
                 key={opt.value}
                 type="button"
                 onClick={() => setLanguage(opt.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
                   language === opt.value
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-primary-600 text-white shadow-sm shadow-primary-600/25 scale-[1.02]"
+                    : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200"
                 }`}
               >
                 {opt.label}
@@ -79,36 +95,63 @@ export default function CreateTask() {
           </div>
         </div>
 
+        {/* Text */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            跟读文本（每行一句）
-          </label>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <label
+              htmlFor="text"
+              className="text-sm font-medium text-gray-700"
+            >
+              跟读文本
+            </label>
+            {lineCount > 0 && (
+              <span className="text-xs tabular-nums text-gray-400">
+                {lineCount} 句
+              </span>
+            )}
+          </div>
           <textarea
+            id="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={10}
-            placeholder="在此输入文本，每行为一句跟读内容..."
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors resize-y font-mono text-sm"
+            rows={12}
+            placeholder={"在此输入文本，每行为一句跟读内容\n\n例如：\n你好，很高兴认识你\n今天天气真不错\n我想去图书馆看书"}
+            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-shadow resize-y"
           />
-          {lineCount > 0 && (
-            <p className="text-xs text-gray-400 mt-1">
-              共 {lineCount} 句
-            </p>
-          )}
         </div>
 
+        {/* Error */}
         {error && (
-          <div className="bg-red-50 text-red-700 px-4 py-2.5 rounded-lg text-sm">
+          <div className="flex items-center gap-2 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm animate-slide-in">
+            <svg
+              className="w-4 h-4 shrink-0"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clipRule="evenodd"
+              />
+            </svg>
             {error}
           </div>
         )}
 
+        {/* Submit */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
+          className="w-full py-3 bg-primary-600 text-white text-sm font-medium rounded-xl hover:bg-primary-700 active:bg-primary-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-sm shadow-primary-600/20"
         >
-          {loading ? "创建中..." : "创建任务"}
+          {loading ? (
+            <span className="inline-flex items-center gap-2">
+              <IconLoader className="w-4 h-4" />
+              创建中...
+            </span>
+          ) : (
+            "创建任务"
+          )}
         </button>
       </form>
     </div>
