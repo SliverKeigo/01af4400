@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:dev": "SHERPA_ONNX_LIB_DIR=sherpa-onnx-v1.12.29-osx-universal2-shared-no-tts/lib DYLD_LIBRARY_PATH=sherpa-onnx-v1.12.29-osx-universal2-shared-no-tts/lib:$DYLD_LIBRARY_PATH tauri dev"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

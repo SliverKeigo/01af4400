@@ -2,46 +2,95 @@ import { useState, useRef, useCallback } from "react";
 
 export type RecorderState = "idle" | "recording" | "processing";
 
+const TARGET_SAMPLE_RATE = 16000;
+
+function downsampleBuffer(
+  buffer: Float32Array,
+  inputRate: number,
+  outputRate: number
+): Float32Array {
+  if (inputRate === outputRate) return buffer;
+  const ratio = inputRate / outputRate;
+  const newLength = Math.round(buffer.length / ratio);
+  const result = new Float32Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    const idx = Math.round(i * ratio);
+    result[i] = buffer[Math.min(idx, buffer.length - 1)];
+  }
+  return result;
+}
+
 export function useRecorder() {
   const [state, setState] = useState<RecorderState>("idle");
-  const mediaRecorder = useRef<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const contextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const chunksRef = useRef<Float32Array[]>([]);
 
   const start = useCallback(async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
-        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
       },
     });
-    chunks.current = [];
-    const recorder = new MediaRecorder(stream);
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.current.push(e.data);
+    streamRef.current = stream;
+
+    const ctx = new AudioContext({ sampleRate: 48000 });
+    contextRef.current = ctx;
+
+    const source = ctx.createMediaStreamSource(stream);
+    const processor = ctx.createScriptProcessor(4096, 1, 1);
+    processorRef.current = processor;
+    chunksRef.current = [];
+
+    processor.onaudioprocess = (e) => {
+      const data = e.inputBuffer.getChannelData(0);
+      chunksRef.current.push(new Float32Array(data));
     };
-    recorder.start();
-    mediaRecorder.current = recorder;
+
+    source.connect(processor);
+    processor.connect(ctx.destination);
     setState("recording");
   }, []);
 
-  const stop = useCallback((): Promise<ArrayBuffer> => {
-    return new Promise((resolve, reject) => {
-      const recorder = mediaRecorder.current;
-      if (!recorder) {
-        reject(new Error("No recorder"));
-        return;
-      }
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks.current, { type: recorder.mimeType });
-        // Stop all tracks
-        recorder.stream.getTracks().forEach((t) => t.stop());
-        // Convert to ArrayBuffer for sending to Rust
-        const buffer = await blob.arrayBuffer();
-        setState("idle");
-        resolve(buffer);
-      };
-      recorder.stop();
-    });
+  const stop = useCallback((): { samples: Float32Array; sampleRate: number } => {
+    // Stop processor
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+
+    // Stop media stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+
+    const inputRate = contextRef.current?.sampleRate ?? 48000;
+
+    // Close audio context
+    if (contextRef.current) {
+      contextRef.current.close();
+      contextRef.current = null;
+    }
+
+    // Merge chunks
+    const totalLength = chunksRef.current.reduce((a, c) => a + c.length, 0);
+    const merged = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunksRef.current) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    chunksRef.current = [];
+
+    // Downsample to 16kHz
+    const samples = downsampleBuffer(merged, inputRate, TARGET_SAMPLE_RATE);
+
+    setState("idle");
+    return { samples, sampleRate: TARGET_SAMPLE_RATE };
   }, []);
 
   return { state, setState, start, stop };

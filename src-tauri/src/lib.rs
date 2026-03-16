@@ -1,7 +1,10 @@
+mod recognizer;
 mod store;
 
+use recognizer::SpeechRecognizer;
 use store::{Language, Task, TaskStore};
 use tauri::Manager;
+use std::path::PathBuf;
 
 #[tauri::command]
 fn create_task(
@@ -63,23 +66,43 @@ fn delete_attempt(
     state.delete_attempt(&task_id, item_index, attempt_index)
 }
 
+fn language_to_sense_voice(lang: &Language) -> &'static str {
+    match lang {
+        Language::Chinese => "zh",
+        Language::English => "en",
+        Language::Japanese => "ja",
+        Language::Korean => "ko",
+        Language::Cantonese => "yue",
+    }
+}
+
 #[tauri::command]
-fn recognize_audio(_audio_data: Vec<u8>, _language: Language) -> Result<String, String> {
-    // TODO: Integrate sherpa-onnx SenseVoice model
-    // Currently returns mock recognition result
-    let mock_texts = [
-        "这是一段模拟的识别结果",
-        "The quick brown fox jumps over the lazy dog",
-        "今日はいい天気ですね",
-        "안녕하세요 반갑습니다",
-        "今日天氣好好呀",
-    ];
-    let idx = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .subsec_millis() as usize
-        % mock_texts.len();
-    Ok(mock_texts[idx].to_string())
+fn recognize_audio(
+    recognizer_state: tauri::State<'_, SpeechRecognizer>,
+    audio_samples: Vec<f32>,
+    sample_rate: i32,
+    language: Language,
+) -> Result<String, String> {
+    if audio_samples.is_empty() {
+        return Err("音频数据为空".to_string());
+    }
+
+    let _lang = language_to_sense_voice(&language);
+
+    recognizer_state.recognize(&audio_samples, sample_rate, _lang)
+}
+
+#[tauri::command]
+fn get_model_status(recognizer_state: tauri::State<'_, SpeechRecognizer>) -> bool {
+    recognizer_state.is_loaded()
+}
+
+#[tauri::command]
+fn load_model(
+    recognizer_state: tauri::State<'_, SpeechRecognizer>,
+    model_dir: String,
+) -> Result<(), String> {
+    recognizer_state.load_model(PathBuf::from(model_dir))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -95,6 +118,49 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir).ok();
             let store = TaskStore::new(app_data_dir.join("tasks.json"));
             app.manage(store);
+
+            // Initialize recognizer and try to auto-load model
+            let recognizer = SpeechRecognizer::new();
+
+            // Try to find model in common locations
+            let resource_dir = app.path().resource_dir().ok();
+            let exe_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+
+            let candidate_dirs = [
+                // Project root (for dev mode)
+                Some(PathBuf::from("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
+                // Absolute path in project
+                Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
+                // Resource dir
+                resource_dir.map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
+                // Next to executable
+                exe_dir.map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
+                // int8 variants
+                Some(PathBuf::from("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09")),
+                Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09")),
+            ];
+
+            for dir in candidate_dirs.into_iter().flatten() {
+                if dir.join("model.onnx").exists() || dir.join("model.int8.onnx").exists() {
+                    match recognizer.load_model(dir.clone()) {
+                        Ok(()) => {
+                            eprintln!("[跟读助手] 模型加载成功: {}", dir.display());
+                            break;
+                        }
+                        Err(e) => {
+                            eprintln!("[跟读助手] 模型加载失败 {}: {}", dir.display(), e);
+                        }
+                    }
+                }
+            }
+
+            if !recognizer.is_loaded() {
+                eprintln!("[跟读助手] 警告: 未找到语音识别模型，请手动配置模型路径");
+            }
+
+            app.manage(recognizer);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -105,6 +171,8 @@ pub fn run() {
             save_attempt,
             delete_attempt,
             recognize_audio,
+            get_model_status,
+            load_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -38,8 +38,17 @@ export async function deleteAttempt(
 }
 
 export async function recognizeAudio(
-  audioData: number[],
+  audioSamples: number[],
+  sampleRate: number,
   language: Language
 ): Promise<string> {
-  return invoke("recognize_audio", { audioData, language });
+  return invoke("recognize_audio", { audioSamples, sampleRate, language });
+}
+
+export async function getModelStatus(): Promise<boolean> {
+  return invoke("get_model_status");
+}
+
+export async function loadModel(modelDir: string): Promise<void> {
+  return invoke("load_model", { modelDir });
 }

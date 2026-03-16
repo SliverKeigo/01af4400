@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getTask, saveAttempt, deleteAttempt, recognizeAudio } from "../lib/api";
+import { getTask, saveAttempt, deleteAttempt, recognizeAudio, getModelStatus } from "../lib/api";
 import type { Task } from "../lib/types";
 import { LANGUAGE_OPTIONS } from "../lib/types";
 import { useRecorder } from "../lib/useRecorder";
@@ -15,6 +15,7 @@ export default function TaskDetail() {
   const [activeItem, setActiveItem] = useState<number | null>(null);
   const [itemState, setItemState] = useState<ItemUIState>("idle");
   const [previewText, setPreviewText] = useState("");
+  const [modelLoaded, setModelLoaded] = useState<boolean | null>(null);
   const recorder = useRecorder();
 
   const loadTask = useCallback(async () => {
@@ -29,6 +30,7 @@ export default function TaskDetail() {
 
   useEffect(() => {
     loadTask();
+    getModelStatus().then(setModelLoaded).catch(() => setModelLoaded(false));
   }, [loadTask]);
 
   async function handleStartRecording(index: number) {
@@ -49,9 +51,9 @@ export default function TaskDetail() {
     if (!task) return;
     setItemState("recognizing");
     try {
-      const buffer = await recorder.stop();
-      const audioData = Array.from(new Uint8Array(buffer));
-      const text = await recognizeAudio(audioData, task.language);
+      const { samples, sampleRate } = recorder.stop();
+      const audioSamples = Array.from(samples);
+      const text = await recognizeAudio(audioSamples, sampleRate, task.language);
       setPreviewText(text);
       setItemState("preview");
     } catch (err) {
@@ -137,6 +139,12 @@ export default function TaskDetail() {
           />
         </div>
       </div>
+
+      {modelLoaded === false && (
+        <div className="bg-amber-50 text-amber-700 px-4 py-2.5 rounded-lg text-sm mb-4">
+          语音识别模型未加载，录音识别功能不可用。请将模型放置在项目根目录。
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 text-red-700 px-4 py-2.5 rounded-lg text-sm mb-4">

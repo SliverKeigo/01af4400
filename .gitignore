@@ -26,9 +26,11 @@ src-tauri/target
 *.sln
 *.sw?
 
-# Model files
+# Model files and sherpa-onnx libs
 *.tar.bz2
 sherpa-onnx-sense-voice-*
+sherpa-onnx-v*
+sherpa-onnx-libs*
 
 # Claude
 .claude/ralph-loop.local.md
