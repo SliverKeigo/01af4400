@@ -51,9 +51,8 @@ export default function TaskDetail() {
     if (!task) return;
     setItemState("recognizing");
     try {
-      const { samples, sampleRate } = recorder.stop();
-      const audioSamples = Array.from(samples);
-      const text = await recognizeAudio(audioSamples, sampleRate, task.language);
+      const { samplesBase64, sampleRate } = recorder.stop();
+      const text = await recognizeAudio(samplesBase64, sampleRate, task.language);
       setPreviewText(text);
       setItemState("preview");
     } catch (err) {

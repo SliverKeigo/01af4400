@@ -3952,6 +3952,7 @@ dependencies = [
 name = "text-to-voice"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "dirs",
  "serde",

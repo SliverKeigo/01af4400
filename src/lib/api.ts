@@ -38,11 +38,11 @@ export async function deleteAttempt(
 }
 
 export async function recognizeAudio(
-  audioSamples: number[],
+  samplesBase64: string,
   sampleRate: number,
   language: Language
 ): Promise<string> {
-  return invoke("recognize_audio", { audioSamples, sampleRate, language });
+  return invoke("recognize_audio", { samplesBase64, sampleRate, language });
 }
 
 export async function getModelStatus(): Promise<boolean> {

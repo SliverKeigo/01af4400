@@ -79,17 +79,32 @@ fn language_to_sense_voice(lang: &Language) -> &'static str {
 #[tauri::command]
 fn recognize_audio(
     recognizer_state: tauri::State<'_, SpeechRecognizer>,
-    audio_samples: Vec<f32>,
+    samples_base64: String,
     sample_rate: i32,
     language: Language,
 ) -> Result<String, String> {
-    if audio_samples.is_empty() {
+    use base64::Engine;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&samples_base64)
+        .map_err(|e| format!("base64 解码失败: {e}"))?;
+
+    if bytes.len() < 4 {
         return Err("音频数据为空".to_string());
     }
 
-    let _lang = language_to_sense_voice(&language);
+    // Convert bytes back to f32 samples (little-endian)
+    let samples: Vec<f32> = bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect();
 
-    recognizer_state.recognize(&audio_samples, sample_rate, _lang)
+    eprintln!("[跟读助手] 收到音频: {} 采样点, 采样率 {}, 时长 {:.1}s",
+        samples.len(), sample_rate, samples.len() as f64 / sample_rate as f64);
+
+    let lang = language_to_sense_voice(&language);
+
+    recognizer_state.recognize(&samples, sample_rate, lang)
 }
 
 #[tauri::command]

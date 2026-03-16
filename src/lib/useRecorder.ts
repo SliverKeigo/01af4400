@@ -20,6 +20,15 @@ function downsampleBuffer(
   return result;
 }
 
+function float32ToBase64(samples: Float32Array): string {
+  const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 export function useRecorder() {
   const [state, setState] = useState<RecorderState>("idle");
   const streamRef = useRef<MediaStream | null>(null);
@@ -37,7 +46,8 @@ export function useRecorder() {
     });
     streamRef.current = stream;
 
-    const ctx = new AudioContext({ sampleRate: 48000 });
+    // Use default system sample rate, don't force 48000
+    const ctx = new AudioContext();
     contextRef.current = ctx;
 
     const source = ctx.createMediaStreamSource(stream);
@@ -55,7 +65,7 @@ export function useRecorder() {
     setState("recording");
   }, []);
 
-  const stop = useCallback((): { samples: Float32Array; sampleRate: number } => {
+  const stop = useCallback((): { samplesBase64: string; sampleRate: number } => {
     // Stop processor
     if (processorRef.current) {
       processorRef.current.disconnect();
@@ -89,8 +99,11 @@ export function useRecorder() {
     // Downsample to 16kHz
     const samples = downsampleBuffer(merged, inputRate, TARGET_SAMPLE_RATE);
 
+    // Encode as base64 for efficient transfer to Rust
+    const samplesBase64 = float32ToBase64(samples);
+
     setState("idle");
-    return { samples, sampleRate: TARGET_SAMPLE_RATE };
+    return { samplesBase64, sampleRate: TARGET_SAMPLE_RATE };
   }, []);
 
   return { state, setState, start, stop };

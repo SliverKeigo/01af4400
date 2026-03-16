@@ -73,7 +73,7 @@ impl SpeechRecognizer {
             .unwrap_or(false)
     }
 
-    pub fn recognize(&self, samples: &[f32], sample_rate: i32, language: &str) -> Result<String, String> {
+    pub fn recognize(&self, samples: &[f32], sample_rate: i32, _language: &str) -> Result<String, String> {
         let guard = self.recognizer.lock().map_err(|e| e.to_string())?;
         let rec = guard
             .as_ref()
