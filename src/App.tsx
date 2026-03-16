@@ -3,6 +3,7 @@ import Sidebar from "./components/Sidebar";
 import TaskList from "./pages/TaskList";
 import CreateTask from "./pages/CreateTask";
 import TaskDetail from "./pages/TaskDetail";
+import TaskResults from "./pages/TaskResults";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
             <Route path="/" element={<TaskList />} />
             <Route path="/create" element={<CreateTask />} />
             <Route path="/task/:taskId" element={<TaskDetail />} />
+            <Route path="/task/:taskId/results" element={<TaskResults />} />
           </Routes>
         </main>
       </div>

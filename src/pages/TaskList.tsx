@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { listTasks, deleteTask } from "../lib/api";
 import type { Task } from "../lib/types";
 import { LANGUAGE_OPTIONS } from "../lib/types";
-import { IconPlus, IconTrash } from "../components/Icons";
+import { IconPlus, IconTrash, IconClipboard } from "../components/Icons";
 
 export default function TaskList() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -116,6 +116,20 @@ export default function TaskList() {
                       )}
                     </div>
                   </div>
+
+                  {/* Results */}
+                  {done > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/task/${task.id}/results`);
+                      }}
+                      className="shrink-0 p-2 rounded-lg text-gray-300 hover:text-primary-600 hover:bg-primary-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                      title="查看结果"
+                    >
+                      <IconClipboard className="w-4 h-4" />
+                    </button>
+                  )}
 
                   {/* Delete */}
                   <button

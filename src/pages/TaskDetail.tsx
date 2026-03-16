@@ -20,6 +20,7 @@ import {
   IconLoader,
   IconSave,
   IconRefresh,
+  IconClipboard,
 } from "../components/Icons";
 
 type ItemUIState = "idle" | "recording" | "recognizing" | "preview";
@@ -162,7 +163,14 @@ export default function TaskDetail() {
               </span>
             </div>
           </div>
-          <div className="text-right">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/task/${task.id}/results`)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+            >
+              <IconClipboard className="w-4 h-4" />
+              查看结果
+            </button>
             <span
               className={`text-2xl font-bold tabular-nums ${
                 pct === 100 ? "text-accent-600" : "text-primary-600"
