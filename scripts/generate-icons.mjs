@@ -1,5 +1,5 @@
 import { chromium } from "@playwright/test";
-import { readFileSync, mkdirSync } from "fs";
+import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -13,7 +13,6 @@ const sizes = [
   { name: "128x128.png", size: 128 },
   { name: "128x128@2x.png", size: 256 },
   { name: "icon.png", size: 512 },
-  // Windows
   { name: "Square30x30Logo.png", size: 30 },
   { name: "Square44x44Logo.png", size: 44 },
   { name: "Square71x71Logo.png", size: 71 },
@@ -34,22 +33,25 @@ async function main() {
 
   for (const { name, size } of sizes) {
     await page.setViewportSize({ width: size, height: size });
+    // Use a transparent background (checkerboard = transparent) so the PNG has an alpha channel
     await page.setContent(`
       <html>
-        <body style="margin:0;padding:0;width:${size}px;height:${size}px;overflow:hidden">
+        <body style="margin:0;padding:0;width:${size}px;height:${size}px;overflow:hidden;background:transparent">
           ${svgContent.replace(/width="[^"]*"/, `width="${size}"`).replace(/height="[^"]*"/, `height="${size}"`)}
         </body>
       </html>
     `);
-    await page.screenshot({ path: resolve(iconsDir, name), type: "png" });
-    console.log(`Generated ${name} (${size}x${size})`);
+    // omitBackground: true ensures RGBA output with alpha channel
+    await page.screenshot({
+      path: resolve(iconsDir, name),
+      type: "png",
+      omitBackground: true,
+    });
+    console.log(`Generated ${name} (${size}x${size}) RGBA`);
   }
 
   await browser.close();
-  console.log("\nDone! PNG icons generated.");
-  console.log("Note: icon.icns and icon.ico need to be generated from icon.png");
-  console.log("  macOS: iconutil or sips");
-  console.log("  Windows: use an online converter or ImageMagick");
+  console.log("\nDone! RGBA PNG icons generated.");
 }
 
 main().catch(console.error);
