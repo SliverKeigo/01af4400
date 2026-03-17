@@ -179,6 +179,114 @@ test.describe("结果总览页", () => {
   });
 });
 
+// ─── 批量导入页 ───
+
+test.describe("批量导入页", () => {
+  test("侧边栏可进入导入页", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "批量导入" }).click();
+    await expect(page).toHaveURL(/\/import/);
+    await expect(page.getByText("批量导入任务")).toBeVisible();
+  });
+
+  test("显示格式说明", async ({ page }) => {
+    await page.goto("/import");
+    await expect(page.getByText("支持的导入格式")).toBeVisible();
+    await expect(page.getByText("TXT", { exact: true })).toBeVisible();
+    await expect(page.getByText("CSV", { exact: true })).toBeVisible();
+    await expect(page.getByText("JSONL", { exact: true })).toBeVisible();
+  });
+
+  test("选择文件按钮存在", async ({ page }) => {
+    await page.goto("/import");
+    await expect(page.getByRole("button", { name: "选择文件" })).toBeVisible();
+  });
+
+  test("导入 TXT 文件后预览并创建", async ({ page }) => {
+    await page.goto("/import");
+
+    await page.evaluate(() => {
+      const content = "你好世界\n今天天气好\n我喜欢编程";
+      const file = new File([content], "test.txt", { type: "text/plain" });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      input.files = dt.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await expect(page.getByRole("heading", { name: /预览/ })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole("heading", { name: /3 句/ })).toBeVisible();
+
+    await page.getByRole("button", { name: /确认导入/ }).click();
+    await expect(page).toHaveURL("/");
+  });
+
+  test("导入 CSV 文件解析多任务", async ({ page }) => {
+    await page.goto("/import");
+
+    await page.evaluate(() => {
+      const csv = "title,language,text\n日语练习,japanese,こんにちは\n日语练习,japanese,元気ですか\n英语,english,Hello World";
+      const file = new File([csv], "tasks.csv", { type: "text/csv" });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      input.files = dt.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await expect(page.getByRole("heading", { name: /2 个任务/ })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("日语练习", { exact: true })).toBeVisible();
+  });
+
+  test("导入 JSON 文件解析", async ({ page }) => {
+    await page.goto("/import");
+
+    await page.evaluate(() => {
+      const json = JSON.stringify([
+        { title: "中文测试", language: "chinese", lines: ["你好", "世界"] },
+        { title: "英文测试", language: "english", lines: ["Hello", "World", "Test"] }
+      ]);
+      const file = new File([json], "tasks.json", { type: "application/json" });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      input.files = dt.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await expect(page.getByRole("heading", { name: /2 个任务/ })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole("heading", { name: /5 句/ })).toBeVisible();
+    await expect(page.getByText("中文测试")).toBeVisible();
+    await expect(page.getByText("英文测试")).toBeVisible();
+  });
+
+  test("返回列表按钮", async ({ page }) => {
+    await page.goto("/import");
+    await page.getByRole("button", { name: "返回列表" }).click();
+    await expect(page).toHaveURL("/");
+  });
+
+  test("语种选择器出现并可切换", async ({ page }) => {
+    await page.goto("/import");
+
+    // 上传 TXT 触发语种选择器
+    await page.evaluate(() => {
+      const file = new File(["line1\nline2"], "t.txt", { type: "text/plain" });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      input.files = dt.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await expect(page.getByText("默认语种")).toBeVisible({ timeout: 3000 });
+    // 切换到日语
+    await page.getByRole("button", { name: "日本語" }).click();
+    await expect(page.getByText("日本語")).toBeVisible();
+  });
+});
+
 // ─── 侧边栏导航 ───
 
 test.describe("侧边栏导航", () => {
