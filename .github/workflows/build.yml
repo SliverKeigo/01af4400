@@ -125,6 +125,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHERPA_ONNX_LIB_DIR: ${{ env.SHERPA_ONNX_LIB_DIR }}
         with:
+          tagName: v__VERSION__
+          releaseName: "跟读助手 v__VERSION__"
+          releaseBody: "macOS 和 Windows 桌面客户端安装包"
+          releaseDraft: true
+          prerelease: false
           args: --target ${{ matrix.target }}
 
       - name: Bundle sherpa-onnx libs (macOS)
