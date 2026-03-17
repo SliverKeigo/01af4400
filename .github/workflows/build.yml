@@ -63,34 +63,61 @@ jobs:
           echo "Downloaded $(wc -c < /tmp/sherpa.tar.bz2) bytes"
           cd /tmp && tar xf sherpa.tar.bz2
           mkdir -p "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib"
-          # Copy lib/ contents
           if [ -d "/tmp/${{ matrix.sherpa_dir }}/lib" ]; then
             cp -r /tmp/${{ matrix.sherpa_dir }}/lib/* "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/"
           fi
-          # Windows: DLLs may be in bin/
           if [ -d "/tmp/${{ matrix.sherpa_dir }}/bin" ]; then
             cp /tmp/${{ matrix.sherpa_dir }}/bin/*.dll "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/" 2>/dev/null || true
           fi
           echo "SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/sherpa-onnx-libs/lib" >> $GITHUB_ENV
           ls -la "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/"
 
-      # Windows: generate onnxruntime.lib from DLL if missing
+      # Windows: generate onnxruntime.lib import library from DLL
       - name: Generate onnxruntime.lib (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
+        shell: pwsh
         run: |
-          cd %GITHUB_WORKSPACE%\sherpa-onnx-libs\lib
-          if not exist onnxruntime.lib (
-            echo Generating onnxruntime.lib from onnxruntime.dll...
-            echo LIBRARY onnxruntime.dll > onnxruntime.def
-            echo EXPORTS >> onnxruntime.def
-            dumpbin /EXPORTS onnxruntime.dll | findstr /R "^ *[0-9][0-9]* " > exports_raw.txt
-            for /F "tokens=4" %%A in (exports_raw.txt) do echo   %%A >> onnxruntime.def
-            lib /DEF:onnxruntime.def /OUT:onnxruntime.lib /MACHINE:X64
-            del exports_raw.txt onnxruntime.def onnxruntime.exp 2>nul
-            echo onnxruntime.lib generated
-          )
-          dir *.lib
+          $libDir = "$env:GITHUB_WORKSPACE\sherpa-onnx-libs\lib"
+          cd $libDir
+
+          if (Test-Path "onnxruntime.lib") {
+            Write-Host "onnxruntime.lib already exists"
+            return
+          }
+
+          Write-Host "Generating onnxruntime.lib from onnxruntime.dll..."
+
+          # Find Visual Studio installation and vcvarsall
+          $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vsWhere -latest -property installationPath
+          $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+
+          Write-Host "Using VS at: $vsPath"
+
+          # Run dumpbin and lib inside a VS developer command prompt
+          $script = @"
+          call "$vcvars" >nul 2>&1
+          cd /d "$libDir"
+          echo LIBRARY onnxruntime.dll > onnxruntime.def
+          echo EXPORTS >> onnxruntime.def
+          for /f "tokens=4" %%A in ('dumpbin /EXPORTS onnxruntime.dll ^| findstr /R "^ *[0-9][0-9]* "') do echo   %%A >> onnxruntime.def
+          lib /DEF:onnxruntime.def /OUT:onnxruntime.lib /MACHINE:X64
+          del onnxruntime.def onnxruntime.exp 2>nul
+          "@
+
+          $tempBat = [System.IO.Path]::GetTempFileName() + ".bat"
+          Set-Content -Path $tempBat -Value $script -Encoding ASCII
+          cmd /c $tempBat
+          Remove-Item $tempBat -ErrorAction SilentlyContinue
+
+          if (Test-Path "onnxruntime.lib") {
+            Write-Host "onnxruntime.lib generated successfully"
+          } else {
+            Write-Error "Failed to generate onnxruntime.lib"
+            exit 1
+          }
+
+          Get-ChildItem *.lib
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -117,7 +144,6 @@ jobs:
         run: |
           EXE_DIR="src-tauri/target/${{ matrix.target }}/release"
           cp sherpa-onnx-libs/lib/*.dll "$EXE_DIR/" 2>/dev/null || true
-          cp sherpa-onnx-libs/lib/*.lib "$EXE_DIR/" 2>/dev/null || true
           find src-tauri/target/${{ matrix.target }}/release/bundle -type d | while read dir; do
             cp sherpa-onnx-libs/lib/*.dll "$dir/" 2>/dev/null || true
           done
@@ -132,80 +158,3 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.nsis
-
-  build-android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
-        run: |
-          sdkmanager "ndk;27.0.12077973"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Install Linux system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Initialize Tauri Android
-        run: npx tauri android init
-
-      - name: Download sherpa-onnx Android libs
-        shell: bash
-        run: |
-          ARCHIVE="sherpa-onnx-${{ env.SHERPA_VERSION }}-android.tar.bz2"
-          URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ env.SHERPA_VERSION }}/$ARCHIVE"
-          echo "Downloading: $URL"
-          curl -L --fail -o /tmp/sherpa-android.tar.bz2 "$URL"
-          echo "Downloaded $(wc -c < /tmp/sherpa-android.tar.bz2) bytes"
-          mkdir -p /tmp/sherpa-android-extract
-          tar xf /tmp/sherpa-android.tar.bz2 -C /tmp/sherpa-android-extract
-
-          SHERPA_DIR="$GITHUB_WORKSPACE/sherpa-onnx-libs"
-          mkdir -p "$SHERPA_DIR/lib"
-          find /tmp/sherpa-android-extract -path "*/arm64-v8a/libsherpa-onnx-c-api.so" -exec cp {} "$SHERPA_DIR/lib/" \;
-          find /tmp/sherpa-android-extract -path "*/arm64-v8a/libonnxruntime.so" -exec cp {} "$SHERPA_DIR/lib/" \;
-          echo "SHERPA_ONNX_LIB_DIR=$SHERPA_DIR/lib" >> $GITHUB_ENV
-          ls -la "$SHERPA_DIR/lib/"
-
-      - name: Build Android APK
-        run: npx tauri android build --apk
-        env:
-          SHERPA_ONNX_LIB_DIR: ${{ env.SHERPA_ONNX_LIB_DIR }}
-          NDK_HOME: ${{ env.NDK_HOME }}
-
-      - name: Upload Android artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
