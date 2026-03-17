@@ -74,6 +74,24 @@ jobs:
           echo "SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/sherpa-onnx-libs/lib" >> $GITHUB_ENV
           ls -la "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/"
 
+      # Windows: generate onnxruntime.lib from DLL if missing
+      - name: Generate onnxruntime.lib (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          cd %GITHUB_WORKSPACE%\sherpa-onnx-libs\lib
+          if not exist onnxruntime.lib (
+            echo Generating onnxruntime.lib from onnxruntime.dll...
+            echo LIBRARY onnxruntime.dll > onnxruntime.def
+            echo EXPORTS >> onnxruntime.def
+            dumpbin /EXPORTS onnxruntime.dll | findstr /R "^ *[0-9][0-9]* " > exports_raw.txt
+            for /F "tokens=4" %%A in (exports_raw.txt) do echo   %%A >> onnxruntime.def
+            lib /DEF:onnxruntime.def /OUT:onnxruntime.lib /MACHINE:X64
+            del exports_raw.txt onnxruntime.def onnxruntime.exp 2>nul
+            echo onnxruntime.lib generated
+          )
+          dir *.lib
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -169,13 +187,13 @@ jobs:
           echo "Downloading: $URL"
           curl -L --fail -o /tmp/sherpa-android.tar.bz2 "$URL"
           echo "Downloaded $(wc -c < /tmp/sherpa-android.tar.bz2) bytes"
-          cd /tmp && tar xf sherpa-android.tar.bz2
+          mkdir -p /tmp/sherpa-android-extract
+          tar xf /tmp/sherpa-android.tar.bz2 -C /tmp/sherpa-android-extract
 
           SHERPA_DIR="$GITHUB_WORKSPACE/sherpa-onnx-libs"
           mkdir -p "$SHERPA_DIR/lib"
-          # Find arm64-v8a libs
-          find /tmp -path "*/arm64-v8a/libsherpa-onnx-c-api.so" -exec cp {} "$SHERPA_DIR/lib/" \;
-          find /tmp -path "*/arm64-v8a/libonnxruntime.so" -exec cp {} "$SHERPA_DIR/lib/" \;
+          find /tmp/sherpa-android-extract -path "*/arm64-v8a/libsherpa-onnx-c-api.so" -exec cp {} "$SHERPA_DIR/lib/" \;
+          find /tmp/sherpa-android-extract -path "*/arm64-v8a/libonnxruntime.so" -exec cp {} "$SHERPA_DIR/lib/" \;
           echo "SHERPA_ONNX_LIB_DIR=$SHERPA_DIR/lib" >> $GITHUB_ENV
           ls -la "$SHERPA_DIR/lib/"
 
