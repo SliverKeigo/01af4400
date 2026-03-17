@@ -4,6 +4,7 @@ import TaskList from "./pages/TaskList";
 import CreateTask from "./pages/CreateTask";
 import TaskDetail from "./pages/TaskDetail";
 import TaskResults from "./pages/TaskResults";
+import ImportTask from "./pages/ImportTask";
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
             <Route path="/create" element={<CreateTask />} />
             <Route path="/task/:taskId" element={<TaskDetail />} />
             <Route path="/task/:taskId/results" element={<TaskResults />} />
+            <Route path="/import" element={<ImportTask />} />
           </Routes>
         </main>
       </div>

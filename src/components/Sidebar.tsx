@@ -1,9 +1,10 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { IconList, IconPlus } from "./Icons";
+import { IconList, IconPlus, IconUpload } from "./Icons";
 
 const NAV_ITEMS = [
   { path: "/", label: "任务列表", icon: IconList },
   { path: "/create", label: "创建任务", icon: IconPlus },
+  { path: "/import", label: "批量导入", icon: IconUpload },
 ];
 
 export default function Sidebar() {
