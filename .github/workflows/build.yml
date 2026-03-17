@@ -2,8 +2,8 @@ name: Build & Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -91,11 +91,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHERPA_ONNX_LIB_DIR: ${{ env.SHERPA_ONNX_LIB_DIR }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "跟读助手 ${{ github.ref_name }}"
-          releaseBody: "See the release assets below for downloads."
-          releaseDraft: true
-          prerelease: false
           args: --target ${{ matrix.target }}
 
       # Bundle sherpa-onnx libs with the app
