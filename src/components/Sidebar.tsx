@@ -61,7 +61,7 @@ export default function Sidebar() {
                   : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
               }`}
             >
-              <Icon className="w-[18px] h-[18px]" />
+              <Icon className="w-4.5 h-4.5" />
               {label}
             </button>
           );

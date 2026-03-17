@@ -258,6 +258,19 @@ pub fn run() {
             }
 
             app.manage(recognizer);
+
+            // Set window icon for dev mode (bundle mode uses icon.icns automatically)
+            if let Some(window) = app.get_webview_window("main") {
+                let icon_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("icons/icon.png");
+                if icon_path.exists() {
+                    if let Ok(icon_data) = std::fs::read(&icon_path) {
+                        let icon = tauri::image::Image::from_bytes(&icon_data)
+                            .expect("failed to load icon");
+                        let _ = window.set_icon(icon);
+                    }
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
