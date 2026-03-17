@@ -1,0 +1,216 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  SHERPA_VERSION: "v1.12.29"
+
+jobs:
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            sherpa_archive: sherpa-onnx-v1.12.29-osx-universal2-shared-no-tts.tar.bz2
+            sherpa_dir: sherpa-onnx-v1.12.29-osx-universal2-shared-no-tts
+            lib_ext: dylib
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            sherpa_archive: sherpa-onnx-v1.12.29-osx-universal2-shared-no-tts.tar.bz2
+            sherpa_dir: sherpa-onnx-v1.12.29-osx-universal2-shared-no-tts
+            lib_ext: dylib
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            sherpa_archive: sherpa-onnx-v1.12.29-win-x64-shared-no-tts.tar.bz2
+            sherpa_dir: sherpa-onnx-v1.12.29-win-x64-shared-no-tts
+            lib_ext: dll
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # Download sherpa-onnx prebuilt libraries
+      - name: Download sherpa-onnx libs
+        shell: bash
+        run: |
+          curl -L -o /tmp/sherpa.tar.bz2 \
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ env.SHERPA_VERSION }}/${{ matrix.sherpa_archive }}"
+          cd /tmp && tar xf sherpa.tar.bz2
+          mkdir -p "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib"
+          cp -r /tmp/${{ matrix.sherpa_dir }}/lib/* "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/"
+          # Windows: also copy DLLs from bin/
+          if [ -d "/tmp/${{ matrix.sherpa_dir }}/bin" ]; then
+            cp /tmp/${{ matrix.sherpa_dir }}/bin/*.dll "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/" 2>/dev/null || true
+          fi
+          ls -la "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/"
+
+      - name: Set SHERPA_ONNX_LIB_DIR
+        shell: bash
+        run: |
+          echo "SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/sherpa-onnx-libs/lib" >> $GITHUB_ENV
+
+      # macOS: install Tauri system deps
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # Build
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHERPA_ONNX_LIB_DIR: ${{ env.SHERPA_ONNX_LIB_DIR }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "跟读助手 ${{ github.ref_name }}"
+          releaseBody: "See the release assets below for downloads."
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+      # Bundle sherpa-onnx libs with the app
+      - name: Bundle sherpa-onnx libs (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          # Find the .app bundle
+          APP_PATH=$(find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.app" -type d | head -1)
+          if [ -n "$APP_PATH" ]; then
+            FRAMEWORKS_DIR="$APP_PATH/Contents/Frameworks"
+            mkdir -p "$FRAMEWORKS_DIR"
+            cp sherpa-onnx-libs/lib/lib*.dylib "$FRAMEWORKS_DIR/"
+            echo "Bundled dylibs into $FRAMEWORKS_DIR"
+            ls "$FRAMEWORKS_DIR/"
+          fi
+
+      - name: Bundle sherpa-onnx libs (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # Copy DLLs next to the exe
+          EXE_DIR="src-tauri/target/${{ matrix.target }}/release"
+          cp sherpa-onnx-libs/lib/*.dll "$EXE_DIR/" 2>/dev/null || true
+          # Also copy into NSIS/MSI bundle directories
+          find src-tauri/target/${{ matrix.target }}/release/bundle -type d -name "text-to-voice*" | while read dir; do
+            cp sherpa-onnx-libs/lib/*.dll "$dir/" 2>/dev/null || true
+          done
+          echo "Bundled DLLs"
+
+      # Upload artifacts
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.nsis
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          sdkmanager "ndk;27.0.12077973"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Initialize Tauri Android
+        run: npx tauri android init
+
+      - name: Download sherpa-onnx Android libs
+        shell: bash
+        run: |
+          # Download Android shared libs
+          ARCHIVE="sherpa-onnx-${{ env.SHERPA_VERSION }}-android-arm64-v8a-shared-no-tts.tar.bz2"
+          curl -L -o /tmp/sherpa-android.tar.bz2 \
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ env.SHERPA_VERSION }}/$ARCHIVE"
+          cd /tmp && tar xf sherpa-android.tar.bz2
+
+          # Set up lib dir for the build
+          SHERPA_DIR="$GITHUB_WORKSPACE/sherpa-onnx-libs"
+          mkdir -p "$SHERPA_DIR/lib"
+          find /tmp -name "libsherpa-onnx-c-api.so" -exec cp {} "$SHERPA_DIR/lib/" \;
+          find /tmp -name "libonnxruntime.so" -exec cp {} "$SHERPA_DIR/lib/" \;
+          echo "SHERPA_ONNX_LIB_DIR=$SHERPA_DIR/lib" >> $GITHUB_ENV
+          ls -la "$SHERPA_DIR/lib/"
+
+      - name: Build Android APK
+        run: npx tauri android build --apk
+        env:
+          SHERPA_ONNX_LIB_DIR: ${{ env.SHERPA_ONNX_LIB_DIR }}
+          NDK_HOME: ${{ env.NDK_HOME }}
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk

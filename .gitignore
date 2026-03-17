@@ -32,5 +32,13 @@ sherpa-onnx-sense-voice-*
 sherpa-onnx-v*
 sherpa-onnx-libs*
 
+# Test outputs
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# Android gen
+src-tauri/gen/android
+
 # Claude
 .claude/ralph-loop.local.md
