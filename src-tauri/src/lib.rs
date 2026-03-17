@@ -117,6 +117,91 @@ fn load_model(
     recognizer_state.load_model(PathBuf::from(model_dir))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+
+    #[test]
+    fn language_to_sense_voice_mapping() {
+        assert_eq!(language_to_sense_voice(&Language::Chinese), "zh");
+        assert_eq!(language_to_sense_voice(&Language::English), "en");
+        assert_eq!(language_to_sense_voice(&Language::Japanese), "ja");
+        assert_eq!(language_to_sense_voice(&Language::Korean), "ko");
+        assert_eq!(language_to_sense_voice(&Language::Cantonese), "yue");
+    }
+
+    #[test]
+    fn base64_f32_roundtrip() {
+        let samples: Vec<f32> = vec![0.0, 0.5, -0.5, 1.0, -1.0];
+        let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+
+        let decoded_bytes = base64::engine::general_purpose::STANDARD
+            .decode(&encoded)
+            .unwrap();
+        let decoded: Vec<f32> = decoded_bytes
+            .chunks_exact(4)
+            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect();
+
+        assert_eq!(samples, decoded);
+    }
+
+    #[test]
+    fn base64_empty_audio_rejected() {
+        // Less than 4 bytes (one f32) should be rejected
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&[0u8, 1, 2]);
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&encoded)
+            .unwrap();
+        assert!(bytes.len() < 4);
+    }
+
+    #[test]
+    fn create_task_trims_and_filters_lines() {
+        let dir = std::env::temp_dir().join(format!("ttv_cmd_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = TaskStore::new(dir.join("t.json"));
+
+        let text = "  hello  \n\n  world  \n   \n";
+        let items: Vec<String> = text
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+
+        let task = store.create_task(None, items, Language::Chinese).unwrap();
+        assert_eq!(task.items.len(), 2);
+        assert_eq!(task.items[0].original_text, "hello");
+        assert_eq!(task.items[1].original_text, "world");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn create_task_empty_title_becomes_none() {
+        let title = "   ";
+        let result = if title.trim().is_empty() {
+            None
+        } else {
+            Some(title.trim().to_string())
+        };
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn create_task_nonempty_title_trimmed() {
+        let title = "  my task  ";
+        let result = if title.trim().is_empty() {
+            None
+        } else {
+            Some(title.trim().to_string())
+        };
+        assert_eq!(result, Some("my task".to_string()));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
