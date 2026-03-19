@@ -99,6 +99,13 @@ jobs:
               fi
             done
           done
+          # Re-sign dylibs after modification (install_name_tool invalidates signatures)
+          for dylib in lib*.dylib; do
+            [ -L "$dylib" ] && continue
+            [ -f "$dylib" ] || continue
+            echo "Re-signing $dylib"
+            codesign --force --sign - "$dylib"
+          done
           echo "--- Verify install names ---"
           for dylib in lib*.dylib; do
             [ -L "$dylib" ] && continue
