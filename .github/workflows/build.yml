@@ -72,6 +72,36 @@ jobs:
           echo "SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/sherpa-onnx-libs/lib" >> $GITHUB_ENV
           ls -la "$GITHUB_WORKSPACE/sherpa-onnx-libs/lib/"
 
+      - name: Download SenseVoice int8 model
+        shell: bash
+        run: |
+          MODEL_NAME="sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09"
+          MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${MODEL_NAME}.tar.bz2"
+          echo "Downloading model: $MODEL_URL"
+          curl -L --fail -o /tmp/model.tar.bz2 "$MODEL_URL"
+          echo "Downloaded $(wc -c < /tmp/model.tar.bz2) bytes"
+          cd /tmp && tar xf model.tar.bz2
+          # Copy only needed files to src-tauri/models/
+          mkdir -p "$GITHUB_WORKSPACE/src-tauri/models"
+          cp "/tmp/${MODEL_NAME}/model.int8.onnx" "$GITHUB_WORKSPACE/src-tauri/models/"
+          cp "/tmp/${MODEL_NAME}/tokens.txt" "$GITHUB_WORKSPACE/src-tauri/models/"
+          ls -la "$GITHUB_WORKSPACE/src-tauri/models/"
+
+      - name: Inject model resources into tauri.conf.json
+        shell: bash
+        run: |
+          cd src-tauri
+          python3 -c "
+          import json
+          with open('tauri.conf.json', 'r') as f:
+              conf = json.load(f)
+          conf['bundle']['resources'] = ['models/model.int8.onnx', 'models/tokens.txt']
+          with open('tauri.conf.json', 'w') as f:
+              json.dump(conf, f, indent=2, ensure_ascii=False)
+          print('Injected resources into tauri.conf.json')
+          "
+          cat tauri.conf.json
+
       # macOS: Fix dylib install names so they use @rpath
       - name: Fix dylib install names (macOS)
         if: runner.os == 'macOS'

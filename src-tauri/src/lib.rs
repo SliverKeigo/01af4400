@@ -226,17 +226,21 @@ pub fn run() {
                 .and_then(|p| p.parent().map(|p| p.to_path_buf()));
 
             let candidate_dirs = [
+                // Bundled resources (for packaged app) — models/ directory inside resources
+                resource_dir.clone().map(|d| d.join("models")),
+                // Resource dir with model folder name
+                resource_dir.clone().map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
+                resource_dir.map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09")),
                 // Project root (for dev mode)
                 Some(PathBuf::from("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
                 // Absolute path in project
                 Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
-                // Resource dir
-                resource_dir.map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
                 // Next to executable
-                exe_dir.map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
+                exe_dir.clone().map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17")),
                 // int8 variants
                 Some(PathBuf::from("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09")),
                 Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09")),
+                exe_dir.map(|d| d.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09")),
             ];
 
             for dir in candidate_dirs.into_iter().flatten() {

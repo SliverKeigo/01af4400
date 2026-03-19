@@ -31,6 +31,7 @@ src-tauri/target
 sherpa-onnx-sense-voice-*
 sherpa-onnx-v*
 sherpa-onnx-libs*
+src-tauri/models/
 
 # Test outputs
 test-results/
